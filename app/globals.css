@@ -1,0 +1,550 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Custom fonts ───────────────────────────────────────────────────────────
+ * Two local fonts drive the brand:
+ *   - Hornes Regular → all headlines (font-display utility)
+ *   - Talina         → sidebar menu items (font-menu utility)
+ *
+ * Place the font files at:
+ *   public/fonts/Hornes-Regular.ttf  (or .woff2 — update src() accordingly)
+ *   public/fonts/Talina.ttf
+ *
+ * If the files are absent, the cascade falls back to Fredoka (next/font)
+ * then system-ui — nothing breaks, just less brand-specific.
+ */
+@font-face {
+  font-family: "Hornes";
+  src: url("/fonts/Hornes-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Talina";
+  src: url("/fonts/Talina.ttf") format("truetype");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * DESIGN SYSTEM — Hiérarchie des 3 langages graphiques
+ * (audit Nadia · art-director G1-Nadia-2)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * TalentRank assume 3 langages visuels distincts, chacun avec sa zone d'usage :
+ *
+ *   1. PNG 3D RENDERED (chunky illustrations)
+ *      Where : sidebar nav items principaux (home/explorer/ranking/qcm/chasse)
+ *      Why   : richesse visuelle + chaleur 3D
+ *      Files : public/images/banner/*.png
+ *      Don't : utiliser ailleurs (header, body, modals)
+ *
+ *   2. SVG MASCOT (radial gradients, double specular, rounded)
+ *      Where : ligues, profil tier, peeking moments, signature brand
+ *      Why   : personnalité, cohérence de famille
+ *      Files : components/ui/LeagueMascot.tsx, HunterMascot.tsx
+ *      Style : viewBox 100×100, useId() filter drop-shadow, joues blush,
+ *              yeux double-specular, sourire visible
+ *
+ *   3. LUCIDE LINE (stroke icons)
+ *      Where : actions secondaires, formulaires, badges, sidebar items
+ *              "secondaires" (opportunités, messages, abonnement)
+ *      Why   : densité d'information, scalable, accessible
+ *      Files : import { X } from "lucide-react"
+ *      Wrap  : dans une chip colorée (52px square) pour matcher la sidebar
+ *              quand utilisé en nav (voir MainSidebar > ItemGlyph)
+ *
+ * Si tu te demandes "lequel utiliser ?" demande-toi d'abord :
+ *   - C'est dans la nav principale ? → PNG 3D
+ *   - C'est une personne ou une ligue ? → SVG mascot
+ *   - C'est une action ou une catégorie ? → Lucide
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --font-headline: "Hornes", "Fredoka Variable", system-ui, sans-serif;
+    --font-menu: "Talina", "Fredoka Variable", system-ui, sans-serif;
+
+    /* ─── DESIGN SYSTEM v2 — Centralised tokens ────────────────────────── */
+    /* Toute valeur visuelle réutilisée vit ICI. Les composants utilisent     */
+    /* var(--token), JAMAIS la valeur en dur. Pour ajouter un style          */
+    /* récurrent, on l'ajoute d'abord ici, puis on consomme.                 */
+
+    /* Brand colors — duplique les tokens Tailwind mais accessible en CSS  */
+    --color-prestige-100: #FFEAA0;
+    --color-prestige-400: #FFC800;
+    --color-prestige-500: #F59E0B;
+    --color-prestige-700: #B45309;
+    --color-night-500: #2C3E55;
+    --color-night-700: #1A2535;
+    --color-night-900: #0A1018;
+    --color-ink: #1B1208;
+
+    /* Surfaces */
+    --bg-cream-soft:    linear-gradient(180deg, #FEFCF6 0%, #FAF6EA 100%);
+    --bg-cream-warm:    linear-gradient(135deg, #FFF8E1 0%, #FFE8B0 100%);
+    --bg-cream-deeper:  linear-gradient(135deg, #FFF3D1 0%, #FFE099 100%);
+
+    /* Shadows — vocabulaire unifié (au lieu de 30 boxShadow inline) */
+    --shadow-card:
+      0 6px 0 0 rgb(0 0 0 / 0.06),
+      0 16px 36px -14px rgb(0 0 0 / 0.10),
+      0 2px 6px -2px rgb(0 0 0 / 0.05);
+    --shadow-card-hover:
+      0 12px 0 0 rgb(0 0 0 / 0.07),
+      0 28px 60px -18px rgb(0 0 0 / 0.14),
+      0 4px 10px -3px rgb(0 0 0 / 0.06);
+    --shadow-card-cream:
+      0 24px 60px -16px rgba(245, 158, 11, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      0 0 0 1px rgba(0, 0, 0, 0.04);
+    --shadow-inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    --shadow-orb-prestige:
+      0 16px 32px -8px rgba(245, 158, 11, 0.55),
+      inset 0 3px 0 rgba(255, 255, 255, 0.55),
+      inset 0 -14px 22px -8px rgba(0, 0, 0, 0.35);
+    --shadow-btn-night:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 4px 10px -4px rgba(0, 0, 0, 0.35);
+    --shadow-btn-night-hover:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 8px 20px -6px rgba(10, 20, 30, 0.5);
+
+    /* Rings (1px inset border-style consistent) */
+    --ring-soft:        inset 0 0 0 1px rgb(0 0 0 / 0.08);
+    --ring-soft-strong: inset 0 0 0 2px rgb(0 0 0 / 0.10);
+    --ring-prestige:    inset 0 0 0 1px rgb(245 158 11 / 0.25);
+
+    /* Gradients — réutilisables */
+    --gradient-night:
+      linear-gradient(180deg, var(--color-night-500), var(--color-night-700));
+    --gradient-prestige-orb:
+      radial-gradient(circle at 30% 25%, #FFE082, var(--color-prestige-500) 60%, var(--color-prestige-700) 100%);
+
+    /* Motion timings (cohérence des courbes) */
+    --ease-bounce: cubic-bezier(0.2, 0.7, 0.2, 1);
+    --ease-snap:   cubic-bezier(0.34, 1.56, 0.64, 1);
+    --dur-fast: 180ms;
+    --dur-base: 280ms;
+    --dur-slow: 480ms;
+  }
+  html,
+  body {
+    background: #FFFFFF; /* pure white — was cream #FFFBF1 */
+    color: #2A1F12;
+    font-feature-settings: "ss01", "ss02", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    background-color: #FFFFFF;
+    /* Pure white base. Subtle cool tints only — no cream/yellow washes left.
+       The grain ::before adds cinematic depth without colouring the surface. */
+    background-image:
+      /* Top wash — very faint cool blue, pulls eye to header */
+      radial-gradient(ellipse 90% 60% at 50% -20%, rgb(28 176 246 / 0.04), transparent 60%),
+      /* Bottom-left soft tint — very subtle violet */
+      radial-gradient(ellipse 50% 40% at 8% 95%, rgb(206 130 255 / 0.03), transparent 60%);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+  /* Cinematic grain — fixed, multiply, opacity 1.2% on the dark noise
+     channel. Invisible at first glance, but enough to break the flat
+     beige on retina screens. NEVER reads as "paper texture". */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.012;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>");
+    background-size: 180px 180px;
+    mix-blend-mode: multiply;
+  }
+  /* Make sure any positioned content sits above the grain overlay. */
+  body > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* a11y — respect users who've requested reduced motion.
+     Disables infinite animations (idle bobs, ping pulses, scroll markers)
+     and shrinks transitions to a perceivable but non-distracting tempo.
+     Framer Motion components honor this via their own internal checks. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  ::selection {
+    background: #1CB0F6;
+    color: #FFFFFF;
+  }
+
+  /* ─── Global focus-visible ───────────────────────────────────────────
+     Tout élément interactif au clavier doit avoir un retour visible.
+     Cyan 2px outline avec un peu d'air = lisible mais pas agressif.
+     Override possible via outline-none + focus-visible:ring-… au cas par cas. */
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid #1CB0F6;
+    outline-offset: 2px;
+    border-radius: inherit;
+  }
+
+  /* CSS-only crosshair pulse — audit Léo G2-Léo-1.
+     Remplace framer-motion motion.span (JS) par animation GPU.
+     Diviseur de coût × N talent cards visibles à l'écran. */
+  @keyframes crosshair-pulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+    50% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
+  }
+  .crosshair-pulse {
+    animation: crosshair-pulse 1.4s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .crosshair-pulse {
+      animation: none;
+    }
+  }
+}
+
+/* ─── Brand utility components — DS v2 ────────────────────────────────────
+   À utiliser PARTOUT au lieu des style={{}} inline. Si tu te surprends à
+   refaire un boxShadow ou un linear-gradient brand-ish dans un composant,
+   c'est qu'il manque une classe ici. */
+@layer components {
+  /* ── Buttons ──────────────────────────────────────────────────────── */
+  .btn-night {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 3rem;            /* 48px — primary action */
+    padding: 0 1.5rem;
+    border-radius: 9999px;
+    background: var(--gradient-night);
+    color: #FFFFFF;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    box-shadow: var(--shadow-btn-night);
+    transition: filter var(--dur-fast), transform var(--dur-fast), box-shadow var(--dur-fast);
+  }
+  .btn-night:hover {
+    filter: brightness(1.1);
+    box-shadow: var(--shadow-btn-night-hover);
+  }
+  .btn-night:active {
+    transform: translateY(1px);
+  }
+  .btn-night:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: none;
+  }
+
+  .btn-prestige {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 3rem;
+    padding: 0 1.5rem;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #FFEAA0 0%, #FFC800 100%);
+    color: var(--color-ink);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 4px 0 0 rgba(201, 154, 0, 0.7),
+      0 12px 28px -8px rgba(255, 200, 0, 0.45);
+    transition: filter var(--dur-fast), transform var(--dur-fast);
+  }
+  .btn-prestige:hover {
+    filter: brightness(1.05);
+  }
+  .btn-prestige:active {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 1px 0 0 rgba(201, 154, 0, 0.7);
+  }
+
+  .btn-glass {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 3rem;
+    padding: 0 1.5rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--color-prestige-700);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    box-shadow: var(--ring-prestige);
+    transition: background var(--dur-fast), transform var(--dur-fast);
+  }
+  .btn-glass:hover {
+    background: #FFFFFF;
+  }
+
+  /* Variantes de taille — appliquer en plus de .btn-* */
+  .btn-sm { height: 2.25rem; padding: 0 1rem; font-size: 11.5px; }
+  .btn-lg { height: 3.5rem; padding: 0 2rem; font-size: 14px; }
+
+  /* ── Cards ────────────────────────────────────────────────────────── */
+  /* Cream signature card (ScorePreview, FinalCTA, premium surfaces) */
+  .card-cream {
+    border-radius: 28px;
+    background: var(--bg-cream-warm);
+    box-shadow: var(--shadow-card-cream);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Neutral white card (HowItWorks step, dashboard) */
+  .card-white {
+    border-radius: 28px;
+    background: #FFFFFF;
+    box-shadow: var(--shadow-card);
+    box-shadow:
+      0 6px 0 0 rgb(0 0 0 / 0.06),
+      0 16px 36px -14px rgb(0 0 0 / 0.10),
+      0 2px 6px -2px rgb(0 0 0 / 0.05),
+      var(--ring-soft);
+    transition: box-shadow var(--dur-base);
+  }
+  .card-white:hover { box-shadow: var(--shadow-card-hover); }
+
+  /* ── Orb (cercle prestige rempli, mascotte au centre) ─────────────── */
+  .orb-prestige {
+    display: grid;
+    place-items: center;
+    border-radius: 9999px;
+    background: var(--gradient-prestige-orb);
+    box-shadow: var(--shadow-orb-prestige);
+  }
+
+  /* ── Halos d'ambiance ─────────────────────────────────────────────── */
+  .halo-prestige {
+    position: absolute;
+    inset: -2rem;
+    pointer-events: none;
+    border-radius: 9999px;
+    background: var(--color-prestige-500);
+    opacity: 0.25;
+    filter: blur(48px);
+  }
+
+  /* ── Pills tier (tier-color en bg, label compact) ─────────────────── */
+  /* Usage : <span class="pill-tier" style="--c: #F59E0B">Or · 88</span>     */
+  .pill-tier {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    background: color-mix(in srgb, var(--c) 13%, transparent);
+    color: var(--c);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 25%, transparent);
+  }
+
+  /* ── Typo scale rigoureuse — fin du chaos text-[X.5px] ──────────────
+     Audit UI/UX a remonté 10 tailles dans la zone 9-15px + 8 trackings.
+     Nouvelle scale (utilise UNIQUEMENT celles-ci en allant de l'avant) :
+
+       Affichage / titres        → font-display via Tailwind text-display-*
+       Body                      → 14px (default)
+       --
+       .text-caption-xs   10px  / 1.3 / tracking 0.14 / uppercase / bold
+       .text-caption      11px  / 1.3 / tracking 0.12 / uppercase / bold
+       .text-label        11px  / 1.4 / tracking 0     / sentence / bold
+       .text-body-sm      13px  / 1.5 / tracking 0     / regular
+       .text-body         14px  / 1.55 / tracking 0    / regular
+       .text-title-sm     16px  / 1.3 / tracking -0.005em / black (cards)
+       .text-title        18px  / 1.25 / tracking -0.01em / black (sub-h)
+       .text-title-lg     22px  / 1.15 / tracking -0.015em / black (section h)
+
+     Trackings nommés (sentence/label/eyebrow) — au lieu de tracking-[0.18em] :
+       .tracking-tight-1  -0.025em  (display)
+       .tracking-tight    -0.015em  (titles)
+       .tracking-normal    0
+       .tracking-label    0.06em    (button caps)
+       .tracking-eyebrow  0.16em    (uppercase eyebrows)
+       .tracking-pill     0.12em    (tier pills)                          */
+
+  .text-caption-xs {
+    font-size: 10px;
+    line-height: 1.3;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .text-caption {
+    font-size: 11px;
+    line-height: 1.3;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .text-label {
+    font-size: 11px;
+    line-height: 1.4;
+    font-weight: 700;
+  }
+  .text-body-sm {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .text-body {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .text-title-sm {
+    font-size: 16px;
+    line-height: 1.3;
+    letter-spacing: -0.005em;
+    font-weight: 900;
+  }
+  .text-title {
+    font-size: 18px;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    font-weight: 900;
+  }
+  .text-title-lg {
+    font-size: 22px;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    font-weight: 900;
+  }
+
+  .tracking-tight-1 { letter-spacing: -0.025em; }
+  .tracking-label   { letter-spacing: 0.06em; }
+  .tracking-eyebrow { letter-spacing: 0.16em; }
+  .tracking-pill    { letter-spacing: 0.12em; }
+}
+
+@layer components {
+  .glass-panel {
+    @apply rounded-3xl border border-ink-700/40 bg-ink-900 shadow-card;
+  }
+  .text-gradient-cyan {
+    background: linear-gradient(180deg, #1CB0F6 0%, #0E89C7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-gradient-amber {
+    background: linear-gradient(180deg, #FFC800 0%, #E0A800 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-gradient-green {
+    background: linear-gradient(180deg, #58CC02 0%, #3DA106 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hairline {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-ink-700/50 to-transparent;
+  }
+
+  /* Subtle dotted pattern — neutral gray dots (was cream-tinted). The radial
+     mask fades the dots out near the edges so they read as "ambiance" not
+     "tablecloth". */
+  .bg-dot-pattern {
+    background-image: radial-gradient(
+      circle,
+      rgba(140, 140, 140, 0.18) 1px,
+      transparent 1.4px
+    );
+    background-size: 18px 18px;
+    background-position: 0 0;
+    -webkit-mask-image: radial-gradient(
+      ellipse 70% 60% at 50% 35%,
+      black 35%,
+      transparent 85%
+    );
+    mask-image: radial-gradient(
+      ellipse 70% 60% at 50% 35%,
+      black 35%,
+      transparent 85%
+    );
+  }
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8;
+  }
+
+  /* Squash & stretch — bouncy hover lift, tactile squash on press.
+     Applied to all interactive card surfaces. */
+  .card-squash {
+    transform: translateY(0) scale(1);
+    transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 200ms ease-out,
+                filter 200ms ease-out;
+    will-change: transform;
+  }
+  .card-squash:hover {
+    transform: translateY(-8px) scale(1.025);
+  }
+  .card-squash:active {
+    transform: translateY(2px) scale(0.96, 0.985);
+    transition-duration: 110ms;
+  }
+
+  /* Lighter squash for inline rows (TalentRow): smaller lift */
+  .row-squash {
+    transition: transform 220ms cubic-bezier(0.34, 1.4, 0.64, 1),
+                box-shadow 180ms ease-out;
+    will-change: transform;
+  }
+  .row-squash:hover {
+    transform: translateY(-3px) scale(1.005);
+  }
+  .row-squash:active {
+    transform: translateY(1px) scale(0.995);
+    transition-duration: 100ms;
+  }
+}
+
+@layer utilities {
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .mask-fade-x {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+    mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  }
+  .mask-fade-b {
+    -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent);
+    mask-image: linear-gradient(to bottom, black 60%, transparent);
+  }
+}

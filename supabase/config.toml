@@ -1,0 +1,28 @@
+# TalentRank — Supabase project config (for `supabase` CLI)
+project_id = "talentrank"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false  # set to true in production
+double_confirm_changes = true
+
+[storage]
+enabled = true
+file_size_limit = "500MiB"
+
+[realtime]
+enabled = true
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
