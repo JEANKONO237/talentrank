@@ -210,6 +210,8 @@ export function ChasseClient({ initialClass }: Props) {
                 setPickedProfession(null);
               }}
               onChangeProfession={() => setPickedProfession(null)}
+              // FIX-5 : switch direct de classe sans revenir aux étapes
+              onPickClass={(c) => setPickedClass(c)}
             />
           </div>
         )}
@@ -299,9 +301,17 @@ interface ResultsProps {
   professionId: string;
   onChangeClass: () => void;
   onChangeProfession: () => void;
+  /** FIX-5 : switch direct vers une autre classe sans repasser par les étapes. */
+  onPickClass: (classId: ExperienceClassId) => void;
 }
 
-function ResultsStep({ classId, professionId, onChangeClass, onChangeProfession }: ResultsProps) {
+function ResultsStep({
+  classId,
+  professionId,
+  onChangeClass,
+  onChangeProfession,
+  onPickClass,
+}: ResultsProps) {
   const cls = EXPERIENCE_CLASSES[classId];
   const profession = PROFESSIONS.find((p) => p.id === professionId);
 
@@ -359,6 +369,15 @@ function ResultsStep({ classId, professionId, onChangeClass, onChangeProfession 
 
   return (
     <>
+      {/* FIX-5 : Switcher rapide entre classes — la RH voit en un coup d'œil
+          combien de profils sont dispo dans chaque niveau, et clique pour
+          changer instantanément sans repasser par les étapes. */}
+      <ClassQuickSwitcher
+        professionId={professionId}
+        activeClass={classId}
+        onPick={onPickClass}
+      />
+
       <div className="mx-auto flex flex-wrap items-center justify-center gap-3 mb-6">
         <SummaryChip onClick={onChangeClass} color={cls.color} label={`Classe ${cls.id}`} sub={cls.seniority} />
         <span className="text-mist-400 text-[11px]">×</span>
@@ -1013,6 +1032,101 @@ function ClassCardsGrid({
       <p className="mt-6 text-center text-[11.5px] text-mist-400">
         Un seul clic suffit · les profils s&apos;affichent immédiatement
       </p>
+    </div>
+  );
+}
+
+// ─── ClassQuickSwitcher (FIX-5) ────────────────────────────────────────────
+// Rangée de 6 pastilles S/A/B/C/D/E en haut de la vue Résultats, avec le
+// compteur de profils par niveau pour le métier sélectionné. La pastille
+// active est mise en évidence. Clic = switch instantané (sans repasser par
+// les étapes précédentes).
+function ClassQuickSwitcher({
+  professionId,
+  activeClass,
+  onPick,
+}: {
+  professionId: string;
+  activeClass: ExperienceClassId;
+  onPick: (classId: ExperienceClassId) => void;
+}) {
+  const countByClass = useMemo(() => {
+    const m = new Map<ExperienceClassId, number>();
+    for (const t of TALENTS) {
+      if (talentProfessionId(t) !== professionId) continue;
+      const cls = experienceClassForYears(t.yearsExperience).id;
+      m.set(cls, (m.get(cls) ?? 0) + 1);
+    }
+    return m;
+  }, [professionId]);
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Switcher de classe"
+      className="mb-5 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2"
+    >
+      {EXPERIENCE_ORDER.map((cls) => {
+        const count = countByClass.get(cls.id) ?? 0;
+        const isActive = cls.id === activeClass;
+        const hasProfiles = count > 0;
+        return (
+          <button
+            key={cls.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            aria-label={`Classe ${cls.id} · ${cls.seniority} · ${count} profil${count > 1 ? "s" : ""}`}
+            onClick={() => onPick(cls.id)}
+            disabled={!hasProfiles && !isActive}
+            className={cn(
+              "group relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11.5px] font-bold transition-all duration-150",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60",
+              isActive
+                ? "text-white shadow-card scale-105"
+                : hasProfiles
+                  ? "bg-white ring-1 ring-inset ring-ink-700/10 hover:ring-ink-700/25 hover:-translate-y-0.5 text-mist-100"
+                  : "bg-ink-50 ring-1 ring-inset ring-ink-700/10 text-mist-400 cursor-not-allowed opacity-60",
+            )}
+            style={
+              isActive
+                ? {
+                    background: `linear-gradient(180deg, ${cls.highlight}, ${cls.color})`,
+                    boxShadow: `0 4px 14px -4px ${cls.color}aa, inset 0 1px 0 rgba(255,255,255,0.4)`,
+                  }
+                : undefined
+            }
+            title={`${cls.seniority} · ${count} profil${count > 1 ? "s" : ""}`}
+          >
+            {/* Cercle avec lettre */}
+            <span
+              className={cn(
+                "inline-grid h-6 w-6 place-items-center rounded-full font-display text-[11px] font-black tabular-nums shrink-0",
+              )}
+              style={{
+                background: isActive ? "rgba(255,255,255,0.25)" : cls.color,
+                color: isActive ? "#FFFFFF" : "#FFFFFF",
+                textShadow: "0 1px 0 rgba(0,0,0,0.2)",
+              }}
+            >
+              {cls.id}
+            </span>
+            {/* Compteur */}
+            <span
+              className={cn(
+                "tabular-nums",
+                isActive ? "text-white" : hasProfiles ? "text-mist-50" : "text-mist-400",
+              )}
+            >
+              {count}
+            </span>
+            {/* Tooltip seniority label sur hover (caché par défaut) */}
+            <span className="hidden sm:inline text-[10.5px] font-bold uppercase tracking-[0.06em] opacity-75">
+              {cls.seniority.split(" ")[0]}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
