@@ -26,6 +26,7 @@ import { Flag } from "@/components/ui/Flag";
 import { SmartBackButton } from "@/components/ui/SmartBackButton";
 import {
   EXPERIENCE_CLASSES,
+  EXPERIENCE_ORDER,
   type ExperienceClassId,
   experienceClassForYears,
 } from "@/lib/experience-class";
@@ -52,13 +53,23 @@ interface Props {
   initialClass: ExperienceClassId | null;
 }
 
-type Step = "class" | "profession" | "results";
+type Step = "class" | "profession" | "class-for-profession" | "results";
 
 export function ChasseClient({ initialClass }: Props) {
   const [pickedClass, setPickedClass] = useState<ExperienceClassId | null>(initialClass);
   const [pickedProfession, setPickedProfession] = useState<string | null>(null);
 
-  const step: Step = !pickedClass ? "class" : !pickedProfession ? "profession" : "results";
+  // Logique du flow :
+  //  - QuickSearch (métier choisi en premier) → class-for-profession
+  //    (cartes de classes avec compteurs de profils par niveau)
+  //  - Flow guidé classique → class → profession → results
+  const step: Step = !pickedClass
+    ? pickedProfession
+      ? "class-for-profession"
+      : "class"
+    : !pickedProfession
+      ? "profession"
+      : "results";
 
   return (
     <div className="relative isolate min-h-screen overflow-hidden">
@@ -94,21 +105,20 @@ export function ChasseClient({ initialClass }: Props) {
         <SmartBackButton fallbackHref="/studio" label="Retour" />
 
         {/* ─── Quick search + pinned : seulement à l'étape 1 (entrée).
-            Permet de skip le flow guidé et aller direct à un métier ciblé. */}
+            Permet de skip le picker classe-en-premier et arriver direct sur
+            les cartes de classes filtrées par métier (avec compteurs). */}
         {step === "class" && (
           <div className="mt-6 mb-10 max-w-3xl mx-auto">
             <QuickProfessionSearch
               onPick={(professionId) => {
-                // Skip les 2 étapes : on prend la classe "A" (Senior) par
-                // défaut. Le studio pourra changer via "Affiner les résultats"
-                // une fois dans la vue des profils.
-                setPickedClass("A");
+                // FIX-4 : on ne fixe PAS la classe — on laisse l'utilisateur
+                // choisir parmi les 6 niveaux, avec compteur par niveau pour
+                // ce métier (step "class-for-profession").
                 setPickedProfession(professionId);
               }}
             />
             <PinnedProfessionsSection
               onPick={(professionId) => {
-                setPickedClass("A");
                 setPickedProfession(professionId);
               }}
             />
@@ -129,6 +139,41 @@ export function ChasseClient({ initialClass }: Props) {
             />
             <div className="mt-12 flex justify-center">
               <ClassPicker onSelect={setPickedClass} />
+            </div>
+          </div>
+        )}
+
+        {/* ─── Step "class-for-profession" (FIX-4) ───────────────────────
+            Métier choisi via QuickSearch ou Pin → on demande la classe avec
+            un compteur de talents disponibles par niveau pour CE métier.
+            Un seul clic sur une carte = avance direct aux résultats. */}
+        {step === "class-for-profession" && pickedProfession && (
+          <div key="class-for-profession-step" className="animate-rise-in">
+            <div className="text-center mb-6">
+              <button
+                onClick={() => setPickedProfession(null)}
+                className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-mist-300 hover:text-mist-50"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.4} />
+                Métier :{" "}
+                {PROFESSIONS.find((p) => p.id === pickedProfession)?.frLabel ??
+                  "Inconnu"}{" "}
+                — changer
+              </button>
+            </div>
+            <StepHeader
+              eyebrow="Quel niveau cherches-tu ?"
+              title={`${
+                PROFESSIONS.find((p) => p.id === pickedProfession)?.frLabel ??
+                ""
+              }`}
+              subtitle="Clique sur un niveau — tu arrives directement sur les profils."
+            />
+            <div className="mt-10 max-w-5xl mx-auto">
+              <ClassCardsGrid
+                professionId={pickedProfession}
+                onSelect={setPickedClass}
+              />
             </div>
           </div>
         )}
@@ -175,12 +220,24 @@ export function ChasseClient({ initialClass }: Props) {
 
 // ─── Stepper ──────────────────────────────────────────────────────────────
 function Stepper({ current }: { current: Step }) {
-  const steps: { id: Step; label: string }[] = [
-    { id: "class", label: "Classe" },
-    { id: "profession", label: "Métier" },
-    { id: "results", label: "Profils" },
-  ];
-  const currentIdx = steps.findIndex((s) => s.id === current);
+  // Le flow "class-for-profession" inverse Métier ↔ Classe.
+  // On adapte les labels du Stepper en conséquence pour rester clair.
+  const isProfFirst = current === "class-for-profession";
+  const steps: { id: Step; label: string }[] = isProfFirst
+    ? [
+        { id: "class-for-profession", label: "Métier" },
+        { id: "class-for-profession", label: "Niveau" },
+        { id: "results", label: "Profils" },
+      ]
+    : [
+        { id: "class", label: "Classe" },
+        { id: "profession", label: "Métier" },
+        { id: "results", label: "Profils" },
+      ];
+  // Pour le mode prof-first, on est toujours sur "Niveau" (étape 2)
+  const currentIdx = isProfFirst
+    ? 1
+    : steps.findIndex((s) => s.id === current);
 
   return (
     <div className="mx-auto mb-8 flex max-w-md items-center gap-2">
@@ -815,5 +872,147 @@ function PinnedProfessionsSection({
         })}
       </div>
     </section>
+  );
+}
+
+// ─── ClassCardsGrid (FIX-4) ────────────────────────────────────────────────
+// Grille des 6 niveaux S/A/B/C/D/E avec compteur de talents disponibles pour
+// le métier sélectionné. Un seul clic = avance direct aux résultats.
+// Différent de ClassPicker (carousel) : grille statique, lisible d'un coup.
+function ClassCardsGrid({
+  professionId,
+  onSelect,
+}: {
+  professionId: string;
+  onSelect: (classId: ExperienceClassId) => void;
+}) {
+  // Compte les talents pour ce métier par niveau (S/A/B/C/D/E)
+  const countByClass = useMemo(() => {
+    const m = new Map<ExperienceClassId, number>();
+    for (const t of TALENTS) {
+      if (talentProfessionId(t) !== professionId) continue;
+      const cls = experienceClassForYears(t.yearsExperience).id;
+      m.set(cls, (m.get(cls) ?? 0) + 1);
+    }
+    return m;
+  }, [professionId]);
+
+  const totalForProfession = useMemo(() => {
+    return TALENTS.filter((t) => talentProfessionId(t) === professionId).length;
+  }, [professionId]);
+
+  return (
+    <div>
+      {/* Bandeau total */}
+      <div className="text-center mb-6">
+        <p className="text-[12.5px] text-mist-300">
+          <strong className="text-mist-50 tabular-nums">{totalForProfession}</strong>{" "}
+          profil{totalForProfession > 1 ? "s" : ""} classé
+          {totalForProfession > 1 ? "s" : ""} au total · choisis le niveau
+        </p>
+      </div>
+
+      {/* Grille 6 classes */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+        {EXPERIENCE_ORDER.map((cls, i) => {
+          const count = countByClass.get(cls.id) ?? 0;
+          const hasProfiles = count > 0;
+          return (
+            <motion.button
+              key={cls.id}
+              type="button"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: i * 0.04 }}
+              onClick={() => onSelect(cls.id)}
+              disabled={!hasProfiles}
+              aria-label={`Niveau ${cls.id} (${cls.seniority}) · ${count} profils disponibles`}
+              className={cn(
+                "group relative overflow-hidden rounded-2xl p-5 text-left transition-all duration-200",
+                "ring-2 ring-white/50",
+                hasProfiles
+                  ? "cursor-pointer hover:-translate-y-1 hover:shadow-card-hover active:translate-y-0"
+                  : "cursor-not-allowed opacity-55",
+              )}
+              style={{
+                background: `radial-gradient(120% 100% at 30% 0%, ${cls.highlight} 0%, ${cls.color} 60%, ${cls.color}dd 100%)`,
+                boxShadow: hasProfiles
+                  ? `0 12px 30px -10px ${cls.color}66, inset 0 1px 0 rgba(255,255,255,0.45)`
+                  : `0 4px 12px -4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.35)`,
+              }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                {/* Big letter S/A/B/C/D/E + emoji */}
+                <div>
+                  <span
+                    className="block font-display font-black tracking-tighter text-white"
+                    style={{
+                      fontSize: "56px",
+                      lineHeight: 0.85,
+                      textShadow: "0 4px 14px rgba(0,0,0,0.25), 0 1px 0 rgba(0,0,0,0.2)",
+                    }}
+                  >
+                    {cls.id}
+                  </span>
+                  <span
+                    className="block mt-1 text-[20px]"
+                    aria-hidden
+                  >
+                    {cls.emoji}
+                  </span>
+                </div>
+
+                {/* Compteur de profils dispo */}
+                <div className="text-right">
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/80"
+                    style={{ textShadow: "0 1px 2px rgba(0,0,0,0.25)" }}
+                  >
+                    {hasProfiles ? "Profils" : "Aucun"}
+                  </p>
+                  <p
+                    className="font-display font-black tabular-nums text-white"
+                    style={{
+                      fontSize: hasProfiles ? "32px" : "24px",
+                      lineHeight: 1,
+                      textShadow: "0 2px 8px rgba(0,0,0,0.3)",
+                    }}
+                  >
+                    {count}
+                  </p>
+                </div>
+              </div>
+
+              {/* Seniority label */}
+              <p
+                className="mt-3 font-display text-[16px] font-black tracking-tight text-white"
+                style={{ textShadow: "0 2px 6px rgba(0,0,0,0.3)" }}
+              >
+                {cls.seniority}
+              </p>
+              <p className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-white/85">
+                {cls.description}
+              </p>
+
+              {/* CTA discret */}
+              {hasProfiles && (
+                <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-white ring-1 ring-inset ring-white/30 group-hover:bg-white/30 transition">
+                  Voir
+                  <ArrowRight
+                    className="h-3 w-3 group-hover:translate-x-0.5 transition"
+                    strokeWidth={2.8}
+                  />
+                </div>
+              )}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      {/* Hint en bas */}
+      <p className="mt-6 text-center text-[11.5px] text-mist-400">
+        Un seul clic suffit · les profils s&apos;affichent immédiatement
+      </p>
+    </div>
   );
 }
