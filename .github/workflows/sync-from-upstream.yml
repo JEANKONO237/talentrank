@@ -1,0 +1,80 @@
+name: Sync from upstream
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Auto-sync workflow.
+#
+# Vit dans l'UPSTREAM (JEANKONO237/talentrank) pour qu'il PERSISTE après les
+# resets sur le fork (jeankono0707-cyber/talentrank-v2). Avant, il n'existait
+# que sur le fork et `git reset --hard upstream/main` le supprimait au 1er
+# run — donc il ne tournait qu'une fois puis disparaissait.
+#
+# Comportement par repo :
+#   • Sur l'upstream JEANKONO237 : tente de fetch JEANKONO237 (= lui-même),
+#     reset hard = no-op, push = no-op. Le run est inoffensif.
+#   • Sur le fork jeankono0707-cyber : fetch JEANKONO237, reset hard sur main,
+#     force push vers origin (le fork). Vercel détecte le push et redéploie.
+#
+# Cron décalé à :07 et :37 pour éviter la congestion GitHub Actions sur les
+# minutes rondes (:00, :15, :30, :45) qui peuvent retarder ou skip le job.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-from-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # Skip ce job sur l'upstream lui-même (sinon il push upstream sur upstream,
+    # déclenche un nouveau push event, qui déclenche le workflow, etc. — boucle).
+    if: github.repository != 'JEANKONO237/talentrank'
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream https://github.com/JEANKONO237/talentrank.git
+
+      - name: Fetch upstream
+        run: git fetch upstream main
+
+      - name: Check if sync needed
+        id: check
+        run: |
+          LOCAL=$(git rev-parse HEAD)
+          REMOTE=$(git rev-parse upstream/main)
+          if [ "$LOCAL" = "$REMOTE" ]; then
+            echo "Already in sync at $LOCAL"
+            echo "needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Need to sync: $LOCAL -> $REMOTE"
+            echo "needed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Reset to upstream and push
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          git reset --hard upstream/main
+          git push --force origin main
+          echo "✅ Fork synced to $(git rev-parse HEAD)"
