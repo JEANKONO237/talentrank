@@ -1147,11 +1147,38 @@ function ClassQuickSwitcher({
   );
 }
 
-// ─── CategoryAisles (FIX-8) ────────────────────────────────────────────────
-// Exploration par rayon, style supermarché. 19 catégories en grille de cards
-// colorées. Clic sur une card → accordéon qui déplie la liste des métiers
-// de cette catégorie avec compteur de candidats. Clic sur un métier →
+// ─── CategoryAisles (FIX-8 + FIX-8b visual) ────────────────────────────────
+// Exploration par rayon, style supermarché Duolingo. 19 catégories en grille
+// de cards remplies de couleur avec emoji géant décoratif en arrière-plan.
+// Clic sur une card → accordéon qui déplie la liste des métiers de cette
+// catégorie avec compteur de candidats. Clic sur un métier →
 // onPickProfession(id) → cartes de classes (step "class-for-profession").
+
+// FIX-8b : un emoji par catégorie pour donner de la personnalité visuelle
+// immédiate. Chaque emoji est ENORME en arrière-plan de la card, opacity
+// réduite, comme les tuiles iOS / Duolingo.
+const CATEGORY_EMOJI: Record<ProfessionCategoryId, string> = {
+  tech: "💻",
+  creative: "🎨",
+  business: "💼",
+  finance: "💰",
+  marketing: "📈",
+  product: "🎯",
+  data: "📊",
+  engineering: "🔧",
+  health: "🩺",
+  education: "🎓",
+  hospitality: "🍽️",
+  logistics: "📦",
+  media: "📺",
+  music: "🎵",
+  architecture: "🏛️",
+  legal: "⚖️",
+  hr: "👥",
+  trades: "🔨",
+  other: "🌟",
+};
+
 function CategoryAisles({
   onPickProfession,
 }: {
@@ -1210,71 +1237,99 @@ function CategoryAisles({
         </p>
       </div>
 
-      {/* Grille des catégories */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-        {PROFESSION_CATEGORIES.map((cat) => {
+      {/* Grille des catégories — style Duolingo / iOS tile (FIX-8b) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        {PROFESSION_CATEGORIES.map((cat, i) => {
           const stats = categoryStats.get(cat.id) ?? {
             professionCount: 0,
             talentCount: 0,
           };
           const isExpanded = expandedCategory === cat.id;
           const CatIcon = iconForCategory(cat.id);
+          const emoji = CATEGORY_EMOJI[cat.id];
           return (
             <motion.button
               key={cat.id}
               type="button"
-              onClick={() =>
-                setExpandedCategory(isExpanded ? null : cat.id)
-              }
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: Math.min(i * 0.025, 0.4) }}
+              onClick={() => setExpandedCategory(isExpanded ? null : cat.id)}
               aria-expanded={isExpanded}
               aria-label={`Rayon ${cat.frLabel} · ${stats.talentCount} candidats`}
+              whileHover={{ y: -3 }}
+              whileTap={{ scale: 0.96 }}
               className={cn(
-                "relative overflow-hidden rounded-2xl p-3.5 text-left transition-all duration-200",
-                "ring-1 ring-inset",
-                isExpanded
-                  ? "ring-2 scale-[1.02]"
-                  : "ring-ink-700/10 hover:ring-ink-700/25 hover:-translate-y-0.5",
+                "group relative aspect-square overflow-hidden rounded-3xl p-4 text-left transition-all duration-200 ring-2",
+                isExpanded ? "ring-white scale-[1.04]" : "ring-white/40",
               )}
               style={{
-                background: isExpanded
-                  ? `linear-gradient(135deg, ${cat.color}25, ${cat.color}10)`
-                  : "white",
+                background: `radial-gradient(120% 100% at 30% 0%, ${cat.color}ee 0%, ${cat.color}cc 50%, ${cat.color}aa 100%)`,
                 boxShadow: isExpanded
-                  ? `0 8px 20px -6px ${cat.color}55, inset 0 1px 0 rgba(255,255,255,0.6)`
-                  : undefined,
+                  ? `0 16px 40px -10px ${cat.color}cc, inset 0 2px 0 rgba(255,255,255,0.4), inset 0 -10px 24px -8px rgba(0,0,0,0.25)`
+                  : `0 8px 24px -8px ${cat.color}88, inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -8px 18px -8px rgba(0,0,0,0.22)`,
               }}
-              whileTap={{ scale: 0.97 }}
             >
-              <div className="flex items-start gap-2.5">
-                <span
-                  className="inline-grid h-9 w-9 place-items-center rounded-xl shrink-0"
-                  style={{
-                    background: `${cat.color}25`,
-                    boxShadow: `inset 0 0 0 1px ${cat.color}40`,
-                  }}
-                >
-                  <CatIcon
-                    className="h-4 w-4"
-                    strokeWidth={2.6}
-                    style={{ color: cat.color }}
-                  />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-display text-[12.5px] font-black tracking-tight text-mist-50 truncate leading-tight">
-                    {cat.frLabel}
-                  </p>
-                  <p className="mt-1 text-[10.5px] text-mist-400 tabular-nums">
-                    {stats.professionCount} métier
-                    {stats.professionCount > 1 ? "s" : ""} ·{" "}
-                    <strong
-                      className="font-black"
-                      style={{
-                        color: stats.talentCount > 0 ? cat.color : undefined,
-                      }}
+              {/* Emoji décoratif géant en arrière-plan */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -bottom-2 -right-1 select-none transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3"
+                style={{
+                  fontSize: "5.5rem",
+                  lineHeight: 1,
+                  filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.25))",
+                  opacity: 0.55,
+                }}
+              >
+                {emoji}
+              </span>
+
+              {/* Halo top-left pour effet 3D */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -top-6 -left-6 h-20 w-20 rounded-full bg-white/30 blur-2xl"
+              />
+
+              {/* Contenu */}
+              <div className="relative h-full flex flex-col justify-between">
+                {/* Top : icon Lucide en pastille blanche translucide */}
+                <div className="flex items-start justify-between gap-2">
+                  <span
+                    className="inline-grid h-9 w-9 place-items-center rounded-xl bg-white/25 backdrop-blur-sm ring-1 ring-inset ring-white/40 shadow-sm"
+                  >
+                    <CatIcon
+                      className="h-4 w-4 text-white"
+                      strokeWidth={2.8}
+                    />
+                  </span>
+                  {/* Pill compteur candidats */}
+                  {stats.talentCount > 0 && (
+                    <span
+                      className="inline-flex h-6 items-center gap-0.5 rounded-full bg-white/95 backdrop-blur-sm px-2 text-[11px] font-black tabular-nums shrink-0"
+                      style={{ color: cat.color }}
                     >
                       {stats.talentCount}
-                    </strong>{" "}
-                    candidat{stats.talentCount > 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+
+                {/* Bottom : titre + sous-texte */}
+                <div className="relative">
+                  <p
+                    className="font-display text-[13px] sm:text-[14px] font-black tracking-tight text-white leading-tight"
+                    style={{
+                      textShadow: "0 2px 8px rgba(0,0,0,0.25)",
+                    }}
+                  >
+                    {cat.frLabel}
+                  </p>
+                  <p
+                    className="mt-0.5 text-[10.5px] font-bold text-white/85 tabular-nums"
+                    style={{ textShadow: "0 1px 3px rgba(0,0,0,0.2)" }}
+                  >
+                    {stats.professionCount} métier
+                    {stats.professionCount > 1 ? "s" : ""}
+                    {stats.talentCount === 0 && " · vide"}
                   </p>
                 </div>
               </div>
