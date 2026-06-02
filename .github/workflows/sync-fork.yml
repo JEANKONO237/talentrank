@@ -1,0 +1,54 @@
+name: Sync fork → Vercel
+
+# Auto-sync le fork jeankono0707-cyber/talentrank-v2 à chaque push sur main.
+# Vercel suit ce fork ; sans ce workflow il faudrait cliquer "Sync fork" sur
+# GitHub à chaque push pour déclencher un nouveau déploiement.
+#
+# Comment ça marche :
+#   1. Quand un commit arrive sur main de ce repo (JEANKONO237/talentrank)
+#   2. Le workflow checkout le code
+#   3. Push force vers le fork via un Personal Access Token (PAT)
+#   4. Le fork reçoit le nouveau commit → Vercel détecte → rebuild
+#
+# Secret requis : FORK_PAT
+#   Token GitHub avec scope `repo` créé depuis le compte jeankono0707-cyber.
+#   Voir Settings → Secrets and variables → Actions → New repository secret.
+
+on:
+  push:
+    branches:
+      - main
+  # Permet de déclencher manuellement depuis l'onglet Actions
+  workflow_dispatch:
+
+# Garantit qu'un seul sync tourne à la fois (évite les race conditions).
+concurrency:
+  group: sync-fork
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout upstream
+        uses: actions/checkout@v4
+        with:
+          # On a besoin de tout l'historique pour pouvoir force-push proprement
+          fetch-depth: 0
+
+      - name: Push to fork
+        env:
+          PAT: ${{ secrets.FORK_PAT }}
+        run: |
+          if [ -z "$PAT" ]; then
+            echo "::error::FORK_PAT secret manquant. Va sur Settings → Secrets → New repository secret."
+            exit 1
+          fi
+          # Configure une identité git (requis pour les opérations, même si on push pas de commit)
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions (auto-sync)"
+          # Push force vers le fork. --force est OK ici car le fork est censé
+          # être un miroir de cet upstream (jamais de commits divergents).
+          git push --force "https://jeankono0707-cyber:${PAT}@github.com/jeankono0707-cyber/talentrank-v2.git" HEAD:main
+          echo "✓ Fork sync'd successfully — Vercel will pick up the change."
