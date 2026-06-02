@@ -4,24 +4,16 @@ name: Sync fork → Vercel
 # Vercel suit ce fork ; sans ce workflow il faudrait cliquer "Sync fork" sur
 # GitHub à chaque push pour déclencher un nouveau déploiement.
 #
-# Comment ça marche :
-#   1. Quand un commit arrive sur main de ce repo (JEANKONO237/talentrank)
-#   2. Le workflow checkout le code
-#   3. Push force vers le fork via un Personal Access Token (PAT)
-#   4. Le fork reçoit le nouveau commit → Vercel détecte → rebuild
-#
 # Secret requis : FORK_PAT
-#   Token GitHub avec scope `repo` créé depuis le compte jeankono0707-cyber.
-#   Voir Settings → Secrets and variables → Actions → New repository secret.
+#   Personal Access Token (classic) créé depuis le compte jeankono0707-cyber
+#   avec scope `repo`. Settings → Secrets and variables → Actions.
 
 on:
   push:
     branches:
       - main
-  # Permet de déclencher manuellement depuis l'onglet Actions
   workflow_dispatch:
 
-# Garantit qu'un seul sync tourne à la fois (évite les race conditions).
 concurrency:
   group: sync-fork
   cancel-in-progress: false
@@ -34,21 +26,40 @@ jobs:
       - name: Checkout upstream
         uses: actions/checkout@v4
         with:
-          # On a besoin de tout l'historique pour pouvoir force-push proprement
           fetch-depth: 0
+          # IMPORTANT : persist-credentials: false sinon GitHub Actions
+          # configure un credential helper qui force github-actions[bot]
+          # à la place de notre PAT lors du git push vers le fork.
+          persist-credentials: false
 
-      - name: Push to fork
+      - name: Push to fork via PAT
         env:
           PAT: ${{ secrets.FORK_PAT }}
         run: |
+          set -e
+
+          # Vérification que le secret est bien présent
           if [ -z "$PAT" ]; then
-            echo "::error::FORK_PAT secret manquant. Va sur Settings → Secrets → New repository secret."
+            echo "::error::Le secret FORK_PAT est vide ou manquant."
+            echo "→ Va sur Settings → Secrets → Actions → New repository secret"
+            echo "→ Name: FORK_PAT, Value: ton Personal Access Token (jeankono0707-cyber, scope 'repo')"
             exit 1
           fi
-          # Configure une identité git (requis pour les opérations, même si on push pas de commit)
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions (auto-sync)"
-          # Push force vers le fork. --force est OK ici car le fork est censé
-          # être un miroir de cet upstream (jamais de commits divergents).
-          git push --force "https://jeankono0707-cyber:${PAT}@github.com/jeankono0707-cyber/talentrank-v2.git" HEAD:main
-          echo "✓ Fork sync'd successfully — Vercel will pick up the change."
+          echo "✓ PAT secret présent (${#PAT} caractères)"
+
+          # Identité git basique
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+          # On supprime toute config credential persistante héritée
+          git config --unset-all http.https://github.com/.extraheader || true
+
+          # Push vers le fork — convention GitHub : `x-access-token:<PAT>`
+          # comme couple user:password. Cette syntaxe fonctionne pour
+          # classique tokens ET fine-grained tokens.
+          FORK_URL="https://x-access-token:${PAT}@github.com/jeankono0707-cyber/talentrank-v2.git"
+
+          echo "→ Push vers le fork (force, branche main)…"
+          git push --force "$FORK_URL" HEAD:main
+
+          echo "✓ Fork synchronisé — Vercel devrait rebuild automatiquement."
