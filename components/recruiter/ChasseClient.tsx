@@ -1179,6 +1179,32 @@ const CATEGORY_EMOJI: Record<ProfessionCategoryId, string> = {
   other: "🌟",
 };
 
+// FIX-8d : palette dédiée aux cards de chasse. La palette globale (cat.color)
+// est volontairement pastel pour matcher le thème cream du site, mais ça
+// rend les tuiles fades. Ici on utilise des couleurs PLEINES et VIBRANTES
+// (Tailwind 500-600) pour que ça pop.
+const CATEGORY_VIBRANT: Record<ProfessionCategoryId, string> = {
+  tech: "#0EA5E9",          // sky-500
+  creative: "#EC4899",      // pink-500
+  business: "#8B5CF6",      // violet-500
+  finance: "#10B981",       // emerald-500
+  marketing: "#F59E0B",     // amber-500
+  product: "#06B6D4",       // cyan-500
+  data: "#7C3AED",          // violet-600 (profond)
+  engineering: "#475569",   // slate-600 (gris foncé, pas pastel)
+  health: "#E11D48",        // rose-600 (rouge médical)
+  education: "#EAB308",     // yellow-500
+  hospitality: "#F97316",   // orange-500
+  logistics: "#64748B",     // slate-500
+  media: "#0891B2",         // cyan-600
+  music: "#DB2777",         // pink-600
+  architecture: "#D97706",  // amber-600
+  legal: "#6D28D9",         // violet-700
+  hr: "#059669",            // emerald-600
+  trades: "#EA580C",        // orange-600
+  other: "#475569",         // slate-600
+};
+
 function CategoryAisles({
   onPickProfession,
 }: {
@@ -1266,18 +1292,25 @@ function CategoryAisles({
           const CatIcon = iconForCategory(cat.id);
           const emoji = CATEGORY_EMOJI[cat.id];
 
-          // Saturation : tile pleine couleur. Si expanded → encore plus saturé
-          // (boostée via overlay sombre). Si vide → légèrement désaturé.
-          const baseColor = cat.color;
+          // FIX-8d : on utilise la palette VIBRANT (pas cat.color qui est
+          // pastel). Couleur PLEINE en fond + overlays gradient blanc/noir
+          // pour effet 3D vivant. Plus de transparence sur la couleur.
+          const baseColor = CATEGORY_VIBRANT[cat.id];
           const bgStyle = isExpanded
             ? {
-                background: `radial-gradient(120% 100% at 30% 0%, ${baseColor} 0%, ${baseColor}f0 60%, ${baseColor}d0 100%)`,
-                boxShadow: `0 14px 32px -8px ${baseColor}cc, inset 0 2px 0 rgba(255,255,255,0.55), inset 0 -12px 26px -8px rgba(0,0,0,0.3)`,
+                background: `
+                  linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 35%, rgba(0,0,0,0.18) 100%),
+                  ${baseColor}
+                `,
+                boxShadow: `0 18px 40px -10px ${baseColor}, inset 0 2px 0 rgba(255,255,255,0.6), inset 0 -14px 28px -8px rgba(0,0,0,0.35)`,
               }
             : {
-                background: `radial-gradient(120% 100% at 30% 0%, ${baseColor}f0 0%, ${baseColor}d8 60%, ${baseColor}b8 100%)`,
-                boxShadow: `0 6px 18px -6px ${baseColor}88, inset 0 2px 0 rgba(255,255,255,0.4), inset 0 -8px 16px -8px rgba(0,0,0,0.22)`,
-                filter: isEmpty ? "saturate(0.7)" : undefined,
+                background: `
+                  linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 40%, rgba(0,0,0,0.15) 100%),
+                  ${baseColor}
+                `,
+                boxShadow: `0 8px 22px -6px ${baseColor}aa, inset 0 2px 0 rgba(255,255,255,0.5), inset 0 -10px 20px -8px rgba(0,0,0,0.28)`,
+                filter: isEmpty ? "saturate(0.65) brightness(0.92)" : undefined,
               };
 
           return (
@@ -1331,7 +1364,7 @@ function CategoryAisles({
                   {stats.talentCount > 0 && (
                     <span
                       className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-black tabular-nums shrink-0"
-                      style={{ color: cat.color }}
+                      style={{ color: baseColor }}
                     >
                       {stats.talentCount}
                     </span>
