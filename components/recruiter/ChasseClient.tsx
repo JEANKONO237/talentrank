@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
@@ -34,9 +34,11 @@ import { findCountry } from "@/lib/countries";
 import { getDiscipline } from "@/lib/disciplines";
 import {
   PROFESSIONS,
+  PROFESSION_CATEGORIES,
   normalizeName,
   type ProfessionCategoryId,
 } from "@/lib/professions";
+import { iconForCategory } from "@/lib/profession-icons";
 import { tierForPercentile } from "@/lib/tiers";
 import { togglePin, usePinnedProfessions } from "@/lib/pinning/professions";
 import {
@@ -111,24 +113,31 @@ export function ChasseClient({ initialClass, initialProfession = null }: Props) 
         {/* Retour intelligent — fallback vers le dashboard studio. */}
         <SmartBackButton fallbackHref="/studio" label="Retour" />
 
-        {/* ─── Quick search + pinned : seulement à l'étape 1 (entrée).
-            Permet de skip le picker classe-en-premier et arriver direct sur
-            les cartes de classes filtrées par métier (avec compteurs). */}
+        {/* ─── Entrée (étape 1) : 3 façons d'arriver aux profils ─────────
+            1. Exploration par rayon (FIX-8) — comme dans un supermarché
+            2. Recherche rapide texte
+            3. Métiers épinglés
+            4. (Ou le flow guidé Classe → Métier juste en dessous) */}
         {step === "class" && (
-          <div className="mt-6 mb-10 max-w-3xl mx-auto">
-            <QuickProfessionSearch
-              onPick={(professionId) => {
-                // FIX-4 : on ne fixe PAS la classe — on laisse l'utilisateur
-                // choisir parmi les 6 niveaux, avec compteur par niveau pour
-                // ce métier (step "class-for-profession").
-                setPickedProfession(professionId);
-              }}
+          <div className="mt-6 mb-10 max-w-5xl mx-auto">
+            <CategoryAisles
+              onPickProfession={(professionId) => setPickedProfession(professionId)}
             />
-            <PinnedProfessionsSection
-              onPick={(professionId) => {
-                setPickedProfession(professionId);
-              }}
-            />
+            <div className="mt-8 max-w-3xl mx-auto">
+              <QuickProfessionSearch
+                onPick={(professionId) => {
+                  // FIX-4 : on ne fixe PAS la classe — on laisse l'utilisateur
+                  // choisir parmi les 6 niveaux, avec compteur par niveau pour
+                  // ce métier (step "class-for-profession").
+                  setPickedProfession(professionId);
+                }}
+              />
+              <PinnedProfessionsSection
+                onPick={(professionId) => {
+                  setPickedProfession(professionId);
+                }}
+              />
+            </div>
           </div>
         )}
 
@@ -1135,5 +1144,238 @@ function ClassQuickSwitcher({
         );
       })}
     </div>
+  );
+}
+
+// ─── CategoryAisles (FIX-8) ────────────────────────────────────────────────
+// Exploration par rayon, style supermarché. 19 catégories en grille de cards
+// colorées. Clic sur une card → accordéon qui déplie la liste des métiers
+// de cette catégorie avec compteur de candidats. Clic sur un métier →
+// onPickProfession(id) → cartes de classes (step "class-for-profession").
+function CategoryAisles({
+  onPickProfession,
+}: {
+  onPickProfession: (professionId: string) => void;
+}) {
+  const [expandedCategory, setExpandedCategory] =
+    useState<ProfessionCategoryId | null>(null);
+
+  const talentCountByProfession = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of TALENTS) {
+      const pid = talentProfessionId(t);
+      if (pid) m.set(pid, (m.get(pid) ?? 0) + 1);
+    }
+    return m;
+  }, []);
+
+  const categoryStats = useMemo(() => {
+    const m = new Map<
+      ProfessionCategoryId,
+      { professionCount: number; talentCount: number }
+    >();
+    for (const p of PROFESSIONS) {
+      const existing = m.get(p.category) ?? {
+        professionCount: 0,
+        talentCount: 0,
+      };
+      existing.professionCount += 1;
+      existing.talentCount += talentCountByProfession.get(p.id) ?? 0;
+      m.set(p.category, existing);
+    }
+    return m;
+  }, [talentCountByProfession]);
+
+  const professionsInExpanded = useMemo(() => {
+    if (!expandedCategory) return [];
+    return PROFESSIONS.filter((p) => p.category === expandedCategory).sort(
+      (a, b) => {
+        const cb = talentCountByProfession.get(b.id) ?? 0;
+        const ca = talentCountByProfession.get(a.id) ?? 0;
+        return cb - ca;
+      },
+    );
+  }, [expandedCategory, talentCountByProfession]);
+
+  return (
+    <section>
+      <div className="text-center mb-5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-800 inline-flex items-center gap-1.5">
+          <Target className="h-3 w-3" strokeWidth={2.8} />
+          Explorer par rayon
+        </p>
+        <p className="mt-1 text-[13px] text-mist-300">
+          Comme dans un supermarché — choisis ton rayon, déplie les métiers,
+          vois les candidats disponibles.
+        </p>
+      </div>
+
+      {/* Grille des catégories */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+        {PROFESSION_CATEGORIES.map((cat) => {
+          const stats = categoryStats.get(cat.id) ?? {
+            professionCount: 0,
+            talentCount: 0,
+          };
+          const isExpanded = expandedCategory === cat.id;
+          const CatIcon = iconForCategory(cat.id);
+          return (
+            <motion.button
+              key={cat.id}
+              type="button"
+              onClick={() =>
+                setExpandedCategory(isExpanded ? null : cat.id)
+              }
+              aria-expanded={isExpanded}
+              aria-label={`Rayon ${cat.frLabel} · ${stats.talentCount} candidats`}
+              className={cn(
+                "relative overflow-hidden rounded-2xl p-3.5 text-left transition-all duration-200",
+                "ring-1 ring-inset",
+                isExpanded
+                  ? "ring-2 scale-[1.02]"
+                  : "ring-ink-700/10 hover:ring-ink-700/25 hover:-translate-y-0.5",
+              )}
+              style={{
+                background: isExpanded
+                  ? `linear-gradient(135deg, ${cat.color}25, ${cat.color}10)`
+                  : "white",
+                boxShadow: isExpanded
+                  ? `0 8px 20px -6px ${cat.color}55, inset 0 1px 0 rgba(255,255,255,0.6)`
+                  : undefined,
+              }}
+              whileTap={{ scale: 0.97 }}
+            >
+              <div className="flex items-start gap-2.5">
+                <span
+                  className="inline-grid h-9 w-9 place-items-center rounded-xl shrink-0"
+                  style={{
+                    background: `${cat.color}25`,
+                    boxShadow: `inset 0 0 0 1px ${cat.color}40`,
+                  }}
+                >
+                  <CatIcon
+                    className="h-4 w-4"
+                    strokeWidth={2.6}
+                    style={{ color: cat.color }}
+                  />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-display text-[12.5px] font-black tracking-tight text-mist-50 truncate leading-tight">
+                    {cat.frLabel}
+                  </p>
+                  <p className="mt-1 text-[10.5px] text-mist-400 tabular-nums">
+                    {stats.professionCount} métier
+                    {stats.professionCount > 1 ? "s" : ""} ·{" "}
+                    <strong
+                      className="font-black"
+                      style={{
+                        color: stats.talentCount > 0 ? cat.color : undefined,
+                      }}
+                    >
+                      {stats.talentCount}
+                    </strong>{" "}
+                    candidat{stats.talentCount > 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
+
+      {/* Accordéon : liste des métiers de la catégorie expanded */}
+      <AnimatePresence>
+        {expandedCategory && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: [0.2, 0.7, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="mt-3 card-white p-4 sm:p-5">
+              {(() => {
+                const cat = PROFESSION_CATEGORIES.find(
+                  (c) => c.id === expandedCategory,
+                )!;
+                return (
+                  <>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span
+                        className="inline-block h-2 w-2 rounded-full"
+                        style={{ background: cat.color }}
+                      />
+                      <h3
+                        className="text-[11px] font-bold uppercase tracking-[0.18em]"
+                        style={{ color: cat.color }}
+                      >
+                        {cat.frLabel} · {professionsInExpanded.length} métier
+                        {professionsInExpanded.length > 1 ? "s" : ""}
+                      </h3>
+                      <span className="h-px flex-1 bg-ink-700/10" />
+                      <button
+                        type="button"
+                        onClick={() => setExpandedCategory(null)}
+                        aria-label="Fermer le rayon"
+                        className="grid h-7 w-7 place-items-center rounded-full text-mist-400 hover:text-mist-50 hover:bg-ink-50 transition"
+                      >
+                        <X className="h-3.5 w-3.5" strokeWidth={2.4} />
+                      </button>
+                    </div>
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {professionsInExpanded.map((p) => {
+                        const count = talentCountByProfession.get(p.id) ?? 0;
+                        const hasProfiles = count > 0;
+                        return (
+                          <li key={p.id}>
+                            <button
+                              type="button"
+                              onClick={() => onPickProfession(p.id)}
+                              className={cn(
+                                "w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left transition group",
+                                hasProfiles
+                                  ? "bg-ink-50 hover:bg-amber-50 ring-1 ring-inset ring-ink-700/10 hover:ring-amber-300/40"
+                                  : "bg-ink-50 ring-1 ring-inset ring-ink-700/10 opacity-70 hover:opacity-100",
+                              )}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="font-display text-[13px] font-black tracking-tight text-mist-50 truncate">
+                                  {p.frLabel}
+                                </p>
+                                <p className="text-[10.5px] text-mist-400">
+                                  {hasProfiles
+                                    ? `${count} candidat${count > 1 ? "s" : ""} disponible${count > 1 ? "s" : ""}`
+                                    : "Pas encore de candidat"}
+                                </p>
+                              </div>
+                              {hasProfiles && (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-black tabular-nums shrink-0"
+                                  style={{
+                                    background: `${cat.color}1f`,
+                                    color: cat.color,
+                                    boxShadow: `inset 0 0 0 1px ${cat.color}40`,
+                                  }}
+                                >
+                                  {count}
+                                </span>
+                              )}
+                              <ArrowRight
+                                className="h-3 w-3 text-mist-400 group-hover:translate-x-0.5 transition shrink-0"
+                                strokeWidth={2.6}
+                              />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                );
+              })()}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
   );
 }
